@@ -1,19 +1,33 @@
 import Socket from './Socket'
+import { ajaxGet } from '../util/http'
 
 /**
  * bilibili房间类
  */
 class Room {
-  constructor (roomid) {
-    this.roomid = roomid
-    this.socket = new Socket(roomid)
+  constructor(roomid) {
+    this.roomid = roomid,
+    this.uid = null,
+    this.host_server_list = [],
+    this.token = null
   }
 
-  _init () {
-    this.socket.init()
+  _init() {
+    ajaxGet('/getRoomId', { id: this.roomid }, (res) => {
+      this.roomid = res.data.room_id
+      this.uid = res.data.uid
+      ajaxGet('/getHostAndToken', { id: this.roomid }, (res) => {
+        this.host_server_list = res.data.host_server_list
+        this.token = res.data.token
+        this.socket = new Socket(this.roomid, this.uid, this.host_server_list,this.token)
+        this.socket.init()
+        
+      })
+    })
+    
   }
 
-  $start () {
+  $start() {
     console.log(`加入房间${this.roomid}`)
     this._init()
     return this
@@ -22,7 +36,7 @@ class Room {
   /**
    * 销毁实例
    */
-  $destroy () {
+  $destroy() {
     // 关闭socket
     this.socket.close()
     this.socket = null
@@ -31,7 +45,7 @@ class Room {
     this.roomid = null
   }
 
-  $subscribe (fn) {
+  $subscribe(fn) {
     const fns = Array.isArray(fn) ? fn : [fn]
     this.socket.addMethods(fns)
     return this

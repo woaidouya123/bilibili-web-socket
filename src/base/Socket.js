@@ -1,4 +1,4 @@
-import wsUrl from '../common/ws-url'
+import parseUrl from '../common/ws-url'
 import msgStruct from '../common/msg-struct'
 import {
   generatePacket
@@ -8,10 +8,14 @@ import {
 } from '../util/convert'
 
 export default class Socket {
-  constructor (roomid) {
+  constructor (roomid, uid, host, token) {
     this.roomid = roomid
+    this.uid = uid
+    this.token = token
+    this.host = host
+    this.host_index = 0
     /* eslint-disable */
-    this._docker = new WebSocket(wsUrl)
+    this._docker = new WebSocket(parseUrl(this.host[this.host_index]))
     this._methods = []
   }
 
@@ -19,7 +23,7 @@ export default class Socket {
     console.log(`新的socket正在初始化...`)
     this._docker.binaryType = 'arraybuffer'
     this._docker.onopen = event => {
-      const join = this._joinRoom(this.roomid)
+      const join = this._joinRoom(this.roomid, this.uid, this.token)
       this._docker.send(join.buffer)
       this._sendBeat()
     }
@@ -51,13 +55,14 @@ export default class Socket {
           try {
             data.body = []
             const body = JSON.parse(bytes2str(recData))
-            if (body.cmd === 'DANMU_MSG') {
-              console.log(body.info[2][1], ':', body.info[1])
-              this._call({
-                name: body.info[2][1],
-                text: body.info[1]
-              })
-            }
+            // if (body.cmd === 'DANMU_MSG') {
+            //   console.log(body.info[2][1], ':', body.info[1])
+            //   this._call({
+            //     name: body.info[2][1],
+            //     text: body.info[1]
+            //   })
+            // }
+            this._call(body)
             data.body.push(body)
           } catch (e) {
             console.log(e)
@@ -72,10 +77,18 @@ export default class Socket {
     this._docker.onclose = event => {
       console.log(`旧的socket已经关闭...`)
     }
+    this._docker.onerror = event => {
+      console.log(`socket连接出错`)
+      if(this.host_index < this.host.length){
+        this.host_index++
+        this._docker = new WebSocket(parseUrl(this.host[this.host_index]))
+        this.init()
+      }
+    }
   }
 
   addMethods(fns) {
-    this._methods = fns
+    this._methods = this._methods.concat(fns)
   }
 
   close() {
@@ -101,10 +114,15 @@ export default class Socket {
   /**
    * 发送加入房价包
    */
-  _joinRoom(rid = 282712, uid = 19176530) {
+  _joinRoom(rid = 282712, uid = 19176530, token) {
     const packet = JSON.stringify({
-      uid,
-      roomid: rid
+      uid:uid,
+      roomid: rid,
+      protover: 1,
+      platform: "web",
+      clientver: "1.11.0",
+      type: 2,
+      key: token
     })
     return generatePacket(7, packet)
   }
